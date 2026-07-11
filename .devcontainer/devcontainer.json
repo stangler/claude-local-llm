@@ -3,5 +3,8 @@
   "build": { "dockerfile": "Dockerfile" },
   "runArgs": ["--gpus", "all"],
   "overrideCommand": false,
-  "forwardPorts": [11434]
+  "forwardPorts": [11434, 8088],
+  "mounts": [
+    "source=ollama-models,target=/root/.ollama,type=volume"
+  ]
 }
