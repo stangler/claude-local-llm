@@ -1,19 +1,22 @@
 FROM mcr.microsoft.com/devcontainers/base:ubuntu-24.04
 
-# 依存追加
-RUN apt-get update && apt-get install -y zstd curl \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y zstd curl
 
 # Ollama
 RUN curl -fsSL https://ollama.com/install.sh | sh
 
-# uv (全ユーザー共通PATHへ配置)
-RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="/usr/local/bin" sh
+# uv (system-wide)
+ENV UV_INSTALL_DIR="/usr/local/bin"
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Node (Claude Code CLI用)
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+# Node.js (Claude Code依存)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs
+
+# Claude Code CLI
 RUN npm install -g @anthropic-ai/claude-code
 
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["sleep", "infinity"]

@@ -1,16 +1,7 @@
 {
-  "name": "local-llm-claude-code",
+  "name": "ollama-dev",
   "build": { "dockerfile": "Dockerfile" },
-  "runArgs": ["--gpus=all"],
-  "hostRequirements": { "gpu": "optional" },
-  "mounts": [
-    "source=ollama-models,target=/root/.ollama,type=volume",
-    "source=coderouter-config,target=/root/.coderouter,type=volume"
-  ],
-  "postStartCommand": "/entrypoint.sh &",
-  "remoteEnv": {
-    "ANTHROPIC_BASE_URL": "http://localhost:8088",
-    "ANTHROPIC_AUTH_TOKEN": "dummy"
-  },
-  "forwardPorts": [8088, 11434]
+  "runArgs": ["--gpus", "all"],
+  "overrideCommand": false,
+  "forwardPorts": [11434]
 }
