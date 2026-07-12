@@ -53,6 +53,10 @@ coderouter --version
 ```
 
 5. `~/.coderouter/providers.yaml` と `~/.coderouter/.env` を配置(下記「providers.yaml 全文」参照)、`source ~/.coderouter/.env`
+   - `.env`の`source`は**シェルプロセス単位**でしか有効にならない(ファイル自体は永続するが、読み込むかはシェルごとに別)。新しいターミナルタブを開くたび・コンテナ再起動のたびに毎回必要。手動が面倒な場合は`~/.bashrc`に1行追加して自動化する:
+     ```bash
+     echo 'source ~/.coderouter/.env' >> ~/.bashrc
+     ```
 6. 疎通確認
 
 ```bash
@@ -92,7 +96,8 @@ profiles:
 - **gemma4:26b-a4bは検討不要。** Q4量子化でも16〜20GB級のVRAMが必要で、RTX 3060 6GBでは全く手が届かない。
 - 7bクラスでも複雑なマルチステップタスクや大規模コンテキスト理解は不向き。用途は軽いQ&A・簡単なコード生成に留めるのが現実的。
 - VRAM 6GB環境では14b以上のモデルはCPUオフロードが発生し大幅に遅くなるリスクあり。
-- **NVIDIA NIMの無料枠モデルは頻繁にEOL(廃止)される。** 現在`qwen/qwen3-next-80b-a3b-instruct`で生存確認済み(2026-07-11)だが、将来的に410 Goneになる可能性が高い。EOLになった場合は下記手順でカタログを取り直すこと。
+- **NVIDIA NIMの無料枠モデルは頻繁にEOL(廃止)される。** 現在`qwen/qwen3-next-80b-a3b-instruct`で生存確認済み(2026-07-12、`nim-qwen3-coder-480b`/`nim-qwen-coder-32b-chat`とも`coderouter doctor --check-model`でauth+basic-chat/tool_calls [OK]・Exit 0確認済み)だが、将来的に410 Goneになる可能性が高い。EOLになった場合は下記手順でカタログを取り直すこと。なお`qwen/qwen3.5-122b-a10b`は前回EOL扱いだったが2026-07-12時点でカタログに復活していることを確認(NIM無料枠のカタログは流動的で、一度EOLになったモデルが再度現れることもある)。
+- **`nim-qwen-coder-32b-chat`のtools宣言ズレを修正済み(2026-07-12)。** 実際は`tool_calls`をネイティブに返せるモデルなのに、providers.yamlでは`tools: false`宣言のままだったため`coderouter doctor`が`[NEEDS TUNING]`を出していた。`tools: true`に修正しExit 0確認済み(下記「providers.yaml全文」に反映済み)。
 - OpenRouterの無料モデル(`:free`サフィックス)は未課金アカウントの場合、日次50リクエスト/分間20リクエストの上限がある(人気モデルはこれをすぐ使い切る)。$10課金すると日次1000リクエストに緩和されるが必須ではない。profileのfallback待機として機能する分には実害なし。
 
 ## トラブルシューティング
@@ -134,13 +139,25 @@ curl -s https://integrate.api.nvidia.com/v1/models \
 
 有望なモデルIDに差し替えたら `coderouter doctor --check-model <provider名>` で疎通確認(`auth+basic-chat`が`[OK]`になることを確認)。
 
-### NIMプロバイダが401を返す
+### NIM/OpenRouterプロバイダが401を返す
 
-`NVIDIA_NIM_API_KEY`がそのシェルセッションで未設定。`source ~/.coderouter/.env`を忘れずに(新しいターミナルタブを開くたびに必要)。
+`NVIDIA_NIM_API_KEY` / `OPENROUTER_API_KEY`がそのシェルセッションで未設定。`source ~/.coderouter/.env`を忘れずに(新しいターミナルタブを開くたび・コンテナ再起動のたびに必要。`~/.bashrc`に`source ~/.coderouter/.env`を追加済みなら自動)。`echo ${#OPENROUTER_API_KEY}`等で文字数が0でないか確認すると切り分けが早い。
 
 ### OpenRouterプロバイダが429を返す
 
-未課金アカウントの日次/分間レート制限。設定ミスではないので待つかfallbackに任せる。$10課金で緩和可能。
+429には2種類あるので、まずレスポンスヘッダーで切り分ける:
+
+```bash
+curl -sS -D - -o /dev/null https://openrouter.ai/api/v1/chat/completions \
+  -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"qwen/qwen3-coder:free","messages":[{"role":"user","content":"hi"}]}'
+```
+
+- `X-RateLimit-*`ヘッダーが付く → **自分のアカウントの日次/分間枠**(未課金は日次50・分間20)を使い切った。待つか$10課金で緩和。
+- `X-RateLimit-*`ヘッダーが無く`retry-after`が数秒程度 → **upstream(モデル提供元)側の一時的な混雑**。自分の日次枠とは無関係で、数秒〜数分待てば解消することが多い。設定ミスではない。
+
+いずれの場合もCodeRouterのprofileがfallbackで動く分には実害なし。
 
 ### zstd関連のollamaインストール失敗
 
@@ -200,7 +217,7 @@ providers:
     capabilities:
       chat: true
       streaming: true
-      tools: false
+      tools: true
   - name: openrouter-free
     kind: openai_compat
     base_url: https://openrouter.ai/api/v1
