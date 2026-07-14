@@ -10,6 +10,7 @@ CodeRouter本体: https://github.com/zephel01/CodeRouter
 - Windows 11 + Docker Desktop (WSL2バックエンド)
 - NVIDIA GPU (RTX 3060 Laptop 6GB で動作確認済み)
 - VS Code + Dev Containers拡張
+- fnm 1.39.0 / Node.js v26.5.0 / pnpm 11.10.0 (Dockerfile内で固定バージョン導入済み)
 
 ## 構成
 
@@ -179,6 +180,19 @@ curl -sS -D - -o /dev/null https://openrouter.ai/api/v1/chat/completions \
 ### zstd関連のollamaインストール失敗
 
 Dockerfileに `apt-get install -y zstd` を追加(本リポジトリのDockerfileは対応済み)。
+
+### fnmインストールで `Unrecognized argument --release-tag`
+
+fnm公式installスクリプト(`https://fnm.vercel.app/install`)は`--release-tag`オプション未対応。バージョン固定にはGitHub Releaseのバイナリを直接取得する(本リポジトリのDockerfileは対応済み):
+
+```dockerfile
+RUN curl -fsSL -o /tmp/fnm.zip https://github.com/Schniz/fnm/releases/download/v1.39.0/fnm-linux.zip \
+    && unzip /tmp/fnm.zip -d "$FNM_DIR" \
+    && rm /tmp/fnm.zip \
+    && chmod +x "$FNM_DIR/fnm"
+```
+
+`fnm-linux.zip`はx86_64向け。arm64環境では`fnm-arm64-linux.zip`に差し替える。
 
 ### `curl -v`でAPIキーを露出させない
 
