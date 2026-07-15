@@ -17,7 +17,14 @@ ENV PATH="$VOLTA_HOME/bin:$PATH"
 ENV PNPM_HOME="/home/vscode/.local/share/pnpm"
 ENV PATH="$PNPM_HOME/bin:$PATH"
 
-# Node/pnpm/Claude Code CLIはビルド後に手動インストール
+# Node.js / pnpm / Claude Code CLI (vscodeユーザーで実行)
+USER vscode
+ENV SHELL=/bin/bash
+RUN volta install node@26.5.0 \
+    && volta install pnpm@11.13.0 \
+    && pnpm setup \
+    && pnpm add -g --allow-build=@anthropic-ai/claude-code @anthropic-ai/claude-code
+USER root
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh

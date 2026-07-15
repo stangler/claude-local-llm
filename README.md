@@ -10,7 +10,7 @@ CodeRouter本体: https://github.com/zephel01/CodeRouter
 - Windows 11 + Docker Desktop (WSL2バックエンド)
 - NVIDIA GPU (RTX 3060 Laptop 6GB で動作確認済み)
 - VS Code + Dev Containers拡張
-- Volta (Dockerfile内で導入済み。Node.js / pnpm / Claude Code CLIはリビルドのたびに手動インストール、下記セットアップ手順参照)
+- Volta / Node.js v26.5.0 / pnpm 11.13.0 / Claude Code CLI (Dockerfile内で自動導入済み)
 
 ## 構成
 
@@ -29,23 +29,14 @@ CodeRouter本体: https://github.com/zephel01/CodeRouter
 
 ## セットアップ
 
-1. リポジトリをVS Codeで開き「Dev Containers: Reopen in Container」(リビルド時も含め毎回)
-2. Node.js / pnpm / Claude Code CLIを手動インストール(Dockerfileには焼き込んでいないため、コンテナ起動・リビルドのたびに必要)
-
-```bash
-volta install node@26.5.0
-volta install pnpm@11.13.0
-pnpm setup && source ~/.bashrc   # 初回のみ。pnpm globalのbin($PNPM_HOME)をPATHに追加
-pnpm add -g @anthropic-ai/claude-code
-```
-
-3. コンテナ起動後、モデルpull
+1. リポジトリをVS Codeで開き「Dev Containers: Reopen in Container」
+2. コンテナ起動後、モデルpull
 
 ```bash
 ollama pull qwen2.5-coder:7b
 ```
 
-4. num_ctx焼き込み済みモデルを作成(Ollama側の`options.num_ctx`はCodeRouterのAnthropic→OpenAI翻訳パスでは効かないため必須)
+3. num_ctx焼き込み済みモデルを作成(Ollama側の`options.num_ctx`はCodeRouterのAnthropic→OpenAI翻訳パスでは効かないため必須)
 
 ```bash
 mkdir -p ~/modelfiles && cd ~/modelfiles
@@ -56,25 +47,25 @@ EOF2
 ollama create qwen2.5-coder-32k:7b -f Modelfile.7b
 ```
 
-5. CodeRouter本体をインストール(pip経由、npm版`coderouter`は同名の別パッケージなので注意)
+4. CodeRouter本体をインストール(pip経由、npm版`coderouter`は同名の別パッケージなので注意)
 
 ```bash
 uv tool install coderouter-cli
 coderouter --version
 ```
 
-6. `~/.coderouter/providers.yaml` と `~/.coderouter/.env` を配置(下記「providers.yaml 全文」参照)、`source ~/.coderouter/.env`
+5. `~/.coderouter/providers.yaml` と `~/.coderouter/.env` を配置(下記「providers.yaml 全文」参照)、`source ~/.coderouter/.env`
    - `.env`の`source`は**シェルプロセス単位**でしか有効にならない(ファイル自体は永続するが、読み込むかはシェルごとに別)。新しいターミナルタブを開くたび・コンテナ再起動のたびに毎回必要。手動が面倒な場合は`~/.bashrc`に1行追加して自動化する:
      ```bash
      echo 'source ~/.coderouter/.env' >> ~/.bashrc
      ```
-7. 疎通確認
+6. 疎通確認
 
 ```bash
 coderouter doctor --check-model ollama-qwen-coder-7b
 ```
 
-8. 起動
+7. 起動
 
 ```bash
 coderouter serve --port 8088
@@ -190,6 +181,10 @@ curl -sS -D - -o /dev/null https://openrouter.ai/api/v1/chat/completions \
 
 Dockerfileに `apt-get install -y zstd` を追加(本リポジトリのDockerfileは対応済み)。
 
+### Dockerfileビルド時に`pnpm setup`で `[ERR_PNPM_UNKNOWN_SHELL] Could not infer shell type`
+
+Docker buildの非対話シェルでは`$SHELL`が未設定でpnpmがシェル種別を推測できない。`ENV SHELL=/bin/bash`を`pnpm setup`実行前に指定する(本リポジトリのDockerfileは対応済み)。
+
 ### `volta install`で `Could not create temporary file` / 権限エラー
 
 `VOLTA_HOME`(`/usr/local/share/volta`)がroot所有のまま。Dockerfileで`chown -R vscode:vscode "$VOLTA_HOME"`を実行済み(本リポジトリのDockerfileは対応済み)。既存コンテナで発生した場合は応急処置:
@@ -200,10 +195,19 @@ sudo chown -R vscode:vscode /usr/local/share/volta
 
 ### `pnpm add -g`で `configured global bin directory ... is not in PATH`
 
-初回のみ`pnpm setup`が必要。
+初回のみ`pnpm setup`が必要(本リポジトリのDockerfileはビルド時に`pnpm setup`実行済み)。既存コンテナで発生した場合:
 
 ```bash
 pnpm setup && source ~/.bashrc
+```
+
+### `claude`コマンドで `claude native binary not installed` (postinstallスクリプト未実行)
+
+pnpmはデフォルトでpostinstallスクリプトをブロックする。`--allow-build`を付けて入れ直す(本リポジトリのDockerfileは対応済み):
+
+```bash
+pnpm remove -g @anthropic-ai/claude-code
+pnpm add -g --allow-build=@anthropic-ai/claude-code @anthropic-ai/claude-code
 ```
 
 ### fnmインストールで `Unrecognized argument --release-tag`
